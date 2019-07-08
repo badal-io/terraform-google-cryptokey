@@ -1,10 +1,9 @@
-data "external" "flatten" {
-  program = ["docker", "run", "muvaki/terraform-flatten:0.1.0", "iam", "${jsonencode(var.iam)}"]
-}
-
-// Locals variables : Module logic
+# Locals variables : Module logic
 locals {
-  iam_permissions = "${compact(split(",", data.external.flatten.result["iam"]))}"
+  iam_permissions = [
+    for k, v in var.iam:
+    { "role" = k, "members" = v}
+  ]
 }
 
 resource "google_kms_crypto_key" "default" {
@@ -18,10 +17,8 @@ resource "google_kms_crypto_key_iam_binding" "default" {
 
     crypto_key_id = "${google_kms_crypto_key.default.id}"
     
-    role      = "${trimspace(element(split("|", local.iam_permissions[count.index]), 0))}"
-    members   = [
-      "${compact(split(" ", element(split("|", local.iam_permissions[count.index]), 1)))}"
-    ]
+    role    = "${trimspace(local.iam_permissions[count.index].role)}"
+    members = "${compact(local.iam_permissions[count.index].members)}"
 
     depends_on = ["google_kms_crypto_key.default"]
 }
